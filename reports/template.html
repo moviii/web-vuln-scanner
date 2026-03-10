@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Security Scan Report — {{ target }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0a0e1a;
+      --bg-card: #111827;
+      --bg-card-2: #1a2235;
+      --border: #1e2d45;
+      --text-primary: #e2e8f0;
+      --text-secondary: #8899b0;
+      --text-muted: #4a5568;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59,130,246,0.15);
+      --red: #ef4444;
+      --red-bg: rgba(239,68,68,0.12);
+      --red-border: rgba(239,68,68,0.3);
+      --orange: #f97316;
+      --orange-bg: rgba(249,115,22,0.12);
+      --orange-border: rgba(249,115,22,0.3);
+      --yellow: #eab308;
+      --yellow-bg: rgba(234,179,8,0.12);
+      --yellow-border: rgba(234,179,8,0.3);
+      --green: #22c55e;
+      --green-bg: rgba(34,197,94,0.1);
+      --teal: #14b8a6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ========= HEADER ========= */
+    .site-header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 2.5rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .site-header::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: -60px;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(99,102,241,0.15), transparent 70%);
+      pointer-events: none;
+    }
+
+    .site-header::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; right: 5%;
+      width: 350px; height: 350px;
+      background: radial-gradient(circle, rgba(59,130,246,0.1), transparent 70%);
+      pointer-events: none;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(59,130,246,0.15);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 99px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #93c5fd;
+      margin-bottom: 1rem;
+    }
+
+    .header-badge .dot {
+      width: 6px; height: 6px;
+      background: #3b82f6;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    .header-title {
+      font-size: 2.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e2e8f0, #93c5fd, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.4rem;
+    }
+
+    .header-target {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      color: #64748b;
+    }
+
+    .header-target span {
+      color: #93c5fd;
+    }
+
+    .header-meta {
+      margin-top: 1.2rem;
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .meta-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .meta-value {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ========= LAYOUT ========= */
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* ========= SUMMARY STATS ========= */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.4rem 1.2rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+
+    .stat-card.total  { border-left: 3px solid #3b82f6; }
+    .stat-card.high   { border-left: 3px solid var(--red); }
+    .stat-card.medium { border-left: 3px solid var(--orange); }
+    .stat-card.low    { border-left: 3px solid var(--yellow); }
+    .stat-card.urls   { border-left: 3px solid var(--teal); }
+
+    .stat-number {
+      font-size: 2.4rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-card.total  .stat-number { color: #60a5fa; }
+    .stat-card.high   .stat-number { color: var(--red); }
+    .stat-card.medium .stat-number { color: var(--orange); }
+    .stat-card.low    .stat-number { color: var(--yellow); }
+    .stat-card.urls   .stat-number { color: var(--teal); }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ========= SECTION ========= */
+    .section {
+      margin-bottom: 2.5rem;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .section-count {
+      margin-left: auto;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 0.2rem 0.65rem;
+      color: var(--text-secondary);
+    }
+
+    /* ========= FINDING CARDS ========= */
+    .finding-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 0.9rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      position: relative;
+    }
+
+    .finding-card:hover {
+      transform: translateX(3px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+
+    .finding-card.risk-High   { border-left: 4px solid var(--red); }
+    .finding-card.risk-Medium { border-left: 4px solid var(--orange); }
+    .finding-card.risk-Low    { border-left: 4px solid var(--yellow); }
+    .finding-card.risk-Info   { border-left: 4px solid #60a5fa; }
+
+    .finding-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      margin-bottom: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    .finding-type {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+      flex: 1;
+    }
+
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.65rem;
+      border-radius: 99px;
+      border: 1px solid;
+    }
+
+    .risk-badge.High   { color: var(--red);    background: var(--red-bg);    border-color: var(--red-border); }
+    .risk-badge.Medium { color: var(--orange);  background: var(--orange-bg);  border-color: var(--orange-border); }
+    .risk-badge.Low    { color: var(--yellow);  background: var(--yellow-bg);  border-color: var(--yellow-border); }
+    .risk-badge.Info   { color: #60a5fa; background: rgba(96,165,250,0.1); border-color: rgba(96,165,250,0.3); }
+
+    .finding-url {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #64748b;
+      word-break: break-all;
+      margin-bottom: 0.5rem;
+    }
+
+    .finding-url a {
+      color: #64748b;
+      text-decoration: none;
+    }
+
+    .finding-url a:hover {
+      color: #93c5fd;
+    }
+
+    .finding-reason {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.6rem;
+    }
+
+    .finding-payload {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      background: #0a0e1a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.75rem;
+      color: #f97316;
+      margin-bottom: 0.65rem;
+      word-break: break-all;
+    }
+
+    .finding-rec {
+      font-size: 0.82rem;
+      color: #4ade80;
+      background: rgba(34,197,94,0.07);
+      border: 1px solid rgba(34,197,94,0.15);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .finding-rec::before {
+      content: '✦ Fix: ';
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    /* ========= URL LIST ========= */
+    .url-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .url-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.15s;
+    }
+
+    .url-item:hover {
+      background: var(--bg-card-2);
+      color: #93c5fd;
+    }
+
+    /* ========= EMPTY STATE ========= */
+    .empty-state {
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+
+    .empty-state .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+    /* ========= FOOTER ========= */
+    footer {
+      margin-top: 4rem;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    footer strong { color: var(--text-secondary); }
+
+    /* ========= RESPONSIVENESS ========= */
+    @media (max-width: 640px) {
+      .header-title { font-size: 1.5rem; }
+      .main { padding: 1rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== HEADER ====== -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-badge">
+        <span class="dot"></span>
+        Security Scan Report
+      </div>
+      <h1 class="header-title">🔍 Web Vulnerability Report</h1>
+      <div class="header-target">Target: <span>{{ target }}</span></div>
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-label">Scan Time</span>
+          <span class="meta-value">{{ scan_time }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Duration</span>
+          <span class="meta-value">{{ "%.1f"|format(duration) }}s</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">URLs Crawled</span>
+          <span class="meta-value">{{ crawled_urls|length }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Forms Found</span>
+          <span class="meta-value">{{ forms_found|length }}</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Total Findings</span>
+          <span class="meta-value">{{ total }}</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====== MAIN ====== -->
+  <main class="main">
+
+    <!-- SUMMARY STATS -->
+    <div class="stats-grid">
+      <div class="stat-card total">
+        <div class="stat-number">{{ total }}</div>
+        <div class="stat-label">Total Issues</div>
+      </div>
+      <div class="stat-card high">
+        <div class="stat-number">{{ high|length }}</div>
+        <div class="stat-label">High Risk</div>
+      </div>
+      <div class="stat-card medium">
+        <div class="stat-number">{{ medium|length }}</div>
+        <div class="stat-label">Medium Risk</div>
+      </div>
+      <div class="stat-card low">
+        <div class="stat-number">{{ low|length }}</div>
+        <div class="stat-label">Low Risk</div>
+      </div>
+      <div class="stat-card urls">
+        <div class="stat-number">{{ crawled_urls|length }}</div>
+        <div class="stat-label">URLs Crawled</div>
+      </div>
+    </div>
+
+    <!-- ===== HIGH RISK ===== -->
+    {% if high %}
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.15);">🚨</div>
+        <h2 class="section-title">High Risk Vulnerabilities</h2>
+        <span class="section-count">{{ high|length }}</span>
+      </div>
+      {% for f in high %}
+      <div class="finding-card risk-High">
+        <div class="finding-top">
+          <span class="finding-type">{{ f.type }}</span>
+          <span class="risk-badge High">● High</span>
+        </div>
+        <div class="finding-url">
+          {% if f.url %}<a href="{{ f.url }}" target="_blank">{{ f.url }}</a>{% endif %}
+          {% if f.host and f.port %} {{ f.host }}:{{ f.port }} ({{ f.service }}){% endif %}
+        </div>
+        <div class="finding-reason">{{ f.reason }}</div>
+        {% if f.payload %}
+        <div class="finding-payload">Payload: {{ f.payload }}</div>
+        {% endif %}
+        {% if f.recommendation %}
+        <div class="finding-rec">{{ f.recommendation }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ===== MEDIUM RISK ===== -->
+    {% if medium %}
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(249,115,22,0.15);">⚠️</div>
+        <h2 class="section-title">Medium Risk Vulnerabilities</h2>
+        <span class="section-count">{{ medium|length }}</span>
+      </div>
+      {% for f in medium %}
+      <div class="finding-card risk-Medium">
+        <div class="finding-top">
+          <span class="finding-type">{{ f.type }}</span>
+          <span class="risk-badge Medium">● Medium</span>
+        </div>
+        <div class="finding-url">
+          {% if f.url %}<a href="{{ f.url }}" target="_blank">{{ f.url }}</a>{% endif %}
+          {% if f.host and f.port %} {{ f.host }}:{{ f.port }} ({{ f.service }}){% endif %}
+          {% if f.header %} — Header: <strong>{{ f.header }}</strong>{% endif %}
+        </div>
+        <div class="finding-reason">{{ f.reason }}</div>
+        {% if f.recommendation %}
+        <div class="finding-rec">{{ f.recommendation }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ===== LOW RISK ===== -->
+    {% if low %}
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(234,179,8,0.12);">💡</div>
+        <h2 class="section-title">Low Risk / Informational</h2>
+        <span class="section-count">{{ low|length }}</span>
+      </div>
+      {% for f in low %}
+      <div class="finding-card risk-Low">
+        <div class="finding-top">
+          <span class="finding-type">{{ f.type }}</span>
+          <span class="risk-badge Low">● Low</span>
+        </div>
+        <div class="finding-url">
+          {% if f.url %}<a href="{{ f.url }}" target="_blank">{{ f.url }}</a>{% endif %}
+          {% if f.header %} — Header: <strong>{{ f.header }}</strong>{% if f.current_value %} = <code>{{ f.current_value }}</code>{% endif %}{% endif %}
+        </div>
+        <div class="finding-reason">{{ f.reason }}</div>
+        {% if f.recommendation %}
+        <div class="finding-rec">{{ f.recommendation }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ===== NO FINDINGS ===== -->
+    {% if total == 0 %}
+    <div class="empty-state">
+      <div class="icon">🎉</div>
+      <strong>No vulnerabilities detected!</strong><br>
+      The target passed all checks in this scan. Continue monitoring regularly.
+    </div>
+    {% endif %}
+
+    <!-- ===== CRAWLED URLS ===== -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(20,184,166,0.15);">🌐</div>
+        <h2 class="section-title">Discovered Endpoints</h2>
+        <span class="section-count">{{ crawled_urls|length }}</span>
+      </div>
+      {% if crawled_urls %}
+      <div class="url-grid">
+        {% for url in crawled_urls|sort %}
+        <div class="url-item" title="{{ url }}">{{ url }}</div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="icon">🔍</div>No endpoints were crawled.</div>
+      {% endif %}
+    </div>
+
+  </main>
+
+  <footer>
+    Generated by <strong>WebVulnScanner v1.0</strong> &mdash;
+    Report should be used for authorized security assessments only.
+    Always obtain permission before scanning.
+  </footer>
+
+</body>
+</html>
