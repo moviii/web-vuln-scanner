@@ -106,4 +106,4 @@ This tool is intended for **educational purposes** and **authorized penetration 
 
 ## License
 
-MIT License
+MIT License.
