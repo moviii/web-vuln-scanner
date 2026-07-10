@@ -20,10 +20,14 @@ XSS_PAYLOADS = [
 ]
 
 
-def _is_reflected(payload: str, response_text: str) -> bool:
+def _is_reflected(payload: str, response_text: str, content_type: str) -> bool:
     """
-    Check if the payload (or its HTML-entity equivalent) appears in the response.
+    Check if the payload (or its HTML-entity equivalent) appears in the response,
+    and that the response is actually HTML — a payload echoed back inside a JSON
+    or plain-text body isn't browser-executable and shouldn't be flagged.
     """
+    if "html" not in content_type.lower():
+        return False
     if payload in response_text:
         return True
     # Some frameworks HTML-encode injections — check for the encoded version too
@@ -53,9 +57,10 @@ def test_xss(forms: list, timeout: int = 10) -> list:
         inputs = form["inputs"]
         page_url = form["page_url"]
 
-        if action in tested:
+        key = (action, method)
+        if key in tested:
             continue
-        tested.add(action)
+        tested.add(key)
 
         # Build form data skeleton
         base_data = {}
@@ -81,7 +86,8 @@ def test_xss(forms: list, timeout: int = 10) -> list:
             except Exception:
                 continue
 
-            if _is_reflected(payload, resp.text):
+            content_type = resp.headers.get("Content-Type", "")
+            if _is_reflected(payload, resp.text, content_type):
                 findings.append({
                     "type": "Cross-Site Scripting (XSS)",
                     "url": action,

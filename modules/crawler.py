@@ -7,7 +7,20 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from collections import deque
-import threading
+
+
+def _normalize_url(url: str) -> str:
+    """
+    Canonicalize a URL for dedup purposes: strips the fragment and any
+    trailing slash on non-root paths, so 'http://x/login' and
+    'http://x/login/' (and 'http://x' vs 'http://x/') aren't treated as
+    two different pages.
+    """
+    parsed = urlparse(url)
+    path = parsed.path or "/"
+    if len(path) > 1 and path.endswith("/"):
+        path = path.rstrip("/")
+    return parsed._replace(path=path, fragment="").geturl()
 
 
 def crawl(base_url: str, depth: int = 2, timeout: int = 10) -> dict:
@@ -24,8 +37,7 @@ def crawl(base_url: str, depth: int = 2, timeout: int = 10) -> dict:
     """
     visited = set()
     forms_found = []
-    queue = deque([(base_url, 0)])
-    lock = threading.Lock()
+    queue = deque([(_normalize_url(base_url), 0)])
 
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc
@@ -46,8 +58,7 @@ def crawl(base_url: str, depth: int = 2, timeout: int = 10) -> dict:
         if current_url in visited or current_depth > depth:
             continue
 
-        with lock:
-            visited.add(current_url)
+        visited.add(current_url)
 
         try:
             response = requests.get(current_url, headers=headers, timeout=timeout, allow_redirects=True)
@@ -87,9 +98,7 @@ def crawl(base_url: str, depth: int = 2, timeout: int = 10) -> dict:
             for tag in soup.find_all("a", href=True):
                 href = tag["href"].strip()
                 full_url = urljoin(current_url, href)
-                parsed_full = urlparse(full_url)
-                # Strip fragments
-                clean_url = parsed_full._replace(fragment="").geturl()
+                clean_url = _normalize_url(full_url)
                 if is_internal(clean_url) and clean_url not in visited:
                     queue.append((clean_url, current_depth + 1))
 

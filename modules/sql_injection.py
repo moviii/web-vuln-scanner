@@ -5,8 +5,9 @@ Tests discovered forms and URL parameters for possible SQL injection vulnerabili
 
 import requests
 import copy
+import time
 
-# Common SQL injection payloads
+# Common SQL injection payloads (error-based / boolean-based / union-based)
 SQL_PAYLOADS = [
     "' OR '1'='1",
     "' OR 1=1 --",
@@ -15,8 +16,19 @@ SQL_PAYLOADS = [
     "1; DROP TABLE users --",
     "' UNION SELECT NULL --",
     "'; EXEC xp_cmdshell('dir') --",
-    "' OR SLEEP(5) --",
 ]
+
+# Time-based blind SQLi payloads: each maps to the delay (in seconds) it should
+# induce on a vulnerable target if the injected SLEEP/pg_sleep/WAITFOR executes.
+TIME_BASED_PAYLOADS = {
+    "' OR SLEEP(5) --": 5,
+    "'; WAITFOR DELAY '0:0:5' --": 5,
+    "' OR pg_sleep(5) --": 5,
+}
+
+# How much slower than baseline (in seconds) a response must be, beyond the
+# induced delay itself, to count as a genuine positive rather than jitter.
+TIME_BASED_TOLERANCE = 2
 
 # Database error signatures that suggest SQL injection
 DB_ERROR_SIGNATURES = [
@@ -44,21 +56,36 @@ DB_ERROR_SIGNATURES = [
 
 
 def _get_baseline_response(url: str, method: str, data: dict, timeout: int = 10):
-    """Get a baseline response with neutral data."""
+    """Get a baseline response with neutral data, timing how long it takes."""
     try:
+        start = time.time()
         if method == "post":
             r = requests.post(url, data=data, timeout=timeout, allow_redirects=True)
         else:
             r = requests.get(url, params=data, timeout=timeout, allow_redirects=True)
-        return r
+        elapsed = time.time() - start
+        return r, elapsed
     except Exception:
-        return None
+        return None, None
 
 
 def _has_db_error(response_text: str) -> bool:
     """Check if the response contains database error signatures."""
     text_lower = response_text.lower()
     return any(sig in text_lower for sig in DB_ERROR_SIGNATURES)
+
+
+def _is_length_anomalous(baseline_len: int, new_len: int) -> bool:
+    """
+    Flag a response length change as suspicious using a relative threshold
+    instead of a fixed byte count, so it scales with page size and is less
+    prone to false positives on pages with naturally variable content.
+    """
+    diff = abs(new_len - baseline_len)
+    if baseline_len == 0:
+        return diff > 500
+    # Require both a meaningful absolute change and a meaningful relative change
+    return diff > 200 and (diff / baseline_len) > 0.3
 
 
 def test_sql_injection(forms: list, timeout: int = 10) -> list:
@@ -81,9 +108,10 @@ def test_sql_injection(forms: list, timeout: int = 10) -> list:
         inputs = form["inputs"]
         page_url = form["page_url"]
 
-        if action in tested:
+        key = (action, method)
+        if key in tested:
             continue
-        tested.add(action)
+        tested.add(key)
 
         # Build neutral baseline data
         baseline_data = {}
@@ -93,17 +121,17 @@ def test_sql_injection(forms: list, timeout: int = 10) -> list:
                 continue
             baseline_data[inp["name"]] = "test"
 
-        baseline_resp = _get_baseline_response(action, method, baseline_data, timeout)
+        if not baseline_data:
+            continue
+
+        baseline_resp, baseline_elapsed = _get_baseline_response(action, method, baseline_data, timeout)
         baseline_len = len(baseline_resp.text) if baseline_resp else 0
 
-        for payload in SQL_PAYLOADS:
-            injected_data = copy.copy(baseline_data)
-            if not injected_data:
-                continue
+        found_for_form = False
 
-            # Inject into each text-like field
-            for field_name in list(injected_data.keys()):
-                injected_data[field_name] = payload
+        # --- Error-based / boolean-based / union-based payloads ---
+        for payload in SQL_PAYLOADS:
+            injected_data = {k: payload for k in baseline_data}
 
             try:
                 if method == "post":
@@ -119,7 +147,7 @@ def test_sql_injection(forms: list, timeout: int = 10) -> list:
             if _has_db_error(resp.text):
                 vulnerable = True
                 reason = "Database error string detected in response"
-            elif baseline_resp and abs(len(resp.text) - baseline_len) > 500:
+            elif baseline_resp and _is_length_anomalous(baseline_len, len(resp.text)):
                 vulnerable = True
                 reason = f"Significant response length difference ({baseline_len} → {len(resp.text)} bytes)"
 
@@ -137,6 +165,42 @@ def test_sql_injection(forms: list, timeout: int = 10) -> list:
                         "Apply input validation and restrict DB error visibility."
                     ),
                 })
-                break  # One finding per form endpoint is enough
+                found_for_form = True
+                break  # One finding per form endpoint is enough for this category
+
+        # --- Time-based blind payloads (only if nothing already found) ---
+        if not found_for_form and baseline_elapsed is not None:
+            for payload, induced_delay in TIME_BASED_PAYLOADS.items():
+                injected_data = {k: payload for k in baseline_data}
+
+                try:
+                    start = time.time()
+                    if method == "post":
+                        requests.post(action, data=injected_data, timeout=timeout + induced_delay, allow_redirects=True)
+                    else:
+                        requests.get(action, params=injected_data, timeout=timeout + induced_delay, allow_redirects=True)
+                    elapsed = time.time() - start
+                except Exception:
+                    continue
+
+                extra_delay = elapsed - baseline_elapsed
+                if extra_delay > (induced_delay - TIME_BASED_TOLERANCE):
+                    findings.append({
+                        "type": "SQL Injection",
+                        "url": action,
+                        "source_page": page_url,
+                        "payload": payload,
+                        "reason": (
+                            f"Response delayed by {extra_delay:.1f}s beyond baseline "
+                            f"({baseline_elapsed:.1f}s), consistent with time-based blind SQLi"
+                        ),
+                        "risk": "High",
+                        "recommendation": (
+                            "Use parameterized queries / prepared statements. "
+                            "Never interpolate user input directly into SQL strings. "
+                            "Apply input validation and restrict DB error visibility."
+                        ),
+                    })
+                    break  # One finding per form endpoint is enough for this category
 
     return findings

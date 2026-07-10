@@ -18,7 +18,6 @@ import argparse
 import time
 import os
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     from colorama import Fore, Style, init as colorama_init

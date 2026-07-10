@@ -25,8 +25,6 @@ SENSITIVE_PATHS = [
     "backup.sql",
     "db.sql",
     "database.sql",
-    "robots.txt",
-    "sitemap.xml",
     "crossdomain.xml",
     "clientaccesspolicy.xml",
     "debug.log",
@@ -48,7 +46,6 @@ TRAVERSAL_SIGNATURES = [
     "[boot loader]",
     "for 16-bit app support",
     "[fonts]",
-    "windows",
 ]
 
 
@@ -114,9 +111,10 @@ def check_directory_traversal(forms: list, timeout: int = 10) -> list:
         inputs = form["inputs"]
         page_url = form["page_url"]
 
-        if action in tested:
+        key = (action, method)
+        if key in tested:
             continue
-        tested.add(action)
+        tested.add(key)
 
         base_data = {}
         for inp in inputs:
